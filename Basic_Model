@@ -1,0 +1,420 @@
+import pygame
+import random
+import numpy
+
+from collections import deque, namedtuple
+
+
+def simplePythag(nums):  # Takes set of numbers and finds total distance
+    Result = 0
+    for i in nums:  # Sum of squares
+        Result += float(i) ** 2
+    Root = Result ** 0.5  # Roots sum
+    return (Root)
+
+
+# SCREEN
+screentime = 0  # Finds ticks per second
+FPS = 60  # Frames p second
+SW = 1200  # Screen width/Height
+SH = 600
+offX = SW / 2  # Postion of origin
+offY = SH / 2
+gridSize = 100  # Size of squares on plane
+
+# COLOURS
+BLACK = (0, 0, 0)
+BLACK1 = (120, 120, 120)
+WHITE = (255, 255, 255)
+WHITE1 = (80, 80, 80)
+BLUE = (217, 231, 249)
+GOLD = (255, 255, 0)
+PURPLE = (202, 90, 155)
+GREEN = (23, 210, 155)
+GREEN1 = (0, 255, 0)
+RED = (255, 0, 0)
+BLUE1 = (0, 0, 255)
+PINK = (237, 23, 144)
+
+# create display
+screen = pygame.display.set_mode((SW, SH))
+Clock = pygame.time.Clock()
+
+# create entity lists#
+blockList = []
+subList = []
+nodeList = []
+
+
+# create classes
+
+
+class block(pygame.sprite.Sprite):  # Create obsticals named 'blocks'
+    def __init__(self, x, y, w, h):
+        pygame.sprite.Sprite.__init__(self)
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.n1 = [x, y]
+        self.n2 = [x + w, y]
+        self.n3 = [x, y + h]
+        self.n4 = [x + w, y + h]
+
+        blockList.append(self)
+
+
+class linkScanner(pygame.sprite.Sprite):  # creates object that checks if two nodes are connected
+    def __init__(self, x, y, velx, vely):
+        pygame.sprite.Sprite.__init__(self)
+        self.x = x
+        self.y = y
+        self.velx = velx
+        self.vely = vely
+
+
+class submarine(pygame.sprite.Sprite):  # creates the travelling body
+    def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self)
+        self.x = x
+        self.y = y
+        self.velx = 0.0
+        self.vely = 0.0
+        self.accx = 0.0
+        self.accy = 0.0
+        subList.append(self)
+
+
+class node(pygame.sprite.Sprite):  # create class for nodes representing points for submarine to pass
+    def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self)
+        self.x = x
+        self.y = y
+        nodeList.append(self)
+
+
+# createBlocks
+blockNumber = 5
+
+# for i in range(0, blockNumber):
+#    i = block(random.randint(0, (SW-gridSize)/gridSize)*gridSize, random.randint(0, (SH-gridSize)/gridSize)*gridSize, gridSize,gridSize)
+
+# fixedBlock1 = block(float(100), float(100), gridSize, gridSize)           #Creation of blocks/obsticles
+#fixedBlock2 = block(float(700), float(200), gridSize, gridSize)
+#fixedBlock3 = block(float(400), float(300), gridSize, gridSize)
+#fixedBlock4 = block(float(600), float(400), gridSize, gridSize)
+fixedBlock5 = block(float(500), float(500), gridSize, gridSize)
+
+# GOAL
+# goal = block(random.randint(0, SW/gridSize)*gridSize, random.randint(0, SH/gridSize)*gridSize,0,0)
+goal = block(offX + 100, offY + 300, 0, 0)  # goal creation with fixed coordinates
+goalrad = 10
+
+# SUBMARINE
+
+sub = submarine(offX, offY)
+subrad = 10  # size fo submarine
+
+# Nodes
+
+# originnode = node(sub.x, sub.y)
+originnode = node(offX, offY)
+goalnode = node(goal.x, goal.y)
+
+for eachblock in blockList:  # adds a node at each corner of block
+    addNode1 = node(eachblock.x, eachblock.y)
+    addNode2 = node((eachblock.x + eachblock.w), eachblock.y)
+    addNode3 = node(eachblock.x, (eachblock.y + eachblock.h))
+    addNode4 = node((eachblock.x + eachblock.w), (eachblock.y + eachblock.h))
+
+linkScannerList = []  # List storing all link scanners
+
+# create a list of lists to hold link scanners for every node
+for numberOfLists in range(len(nodeList)):
+    linkScannerList.append([])
+
+
+for item in range(len(linkScannerList)):
+    for node in nodeList:
+        linkScannerList[item].append(linkScanner(node.x, node.y, 0, 0))
+for i in linkScannerList:
+    print(i)
+
+###
+
+###
+
+
+# we'll use infinity as a default distance to nodes.
+inf = float('inf')
+Edge = namedtuple('Edge', 'start, end, cost')
+
+
+def make_edge(start, end, cost=1):
+    return Edge(start, end, cost)
+
+
+class Graph:
+    def __init__(self, edges):
+        # let's check that the data is right
+        wrong_edges = [i for i in edges if len(i) not in [2, 3]]
+        if wrong_edges:
+            raise ValueError('Wrong edges data: {}'.format(wrong_edges))
+
+        self.edges = [make_edge(*edge) for edge in edges]
+
+    @property
+    def vertices(self):
+        return set(
+            sum(
+                ([edge.start, edge.end] for edge in self.edges), []
+            )
+        )
+
+    def get_node_pairs(self, n1, n2, both_ends=True):
+        if both_ends:
+            node_pairs = [[n1, n2], [n2, n1]]
+        else:
+            node_pairs = [[n1, n2]]
+        return node_pairs
+
+    def remove_edge(self, n1, n2, both_ends=True):
+        node_pairs = self.get_node_pairs(n1, n2, both_ends)
+        edges = self.edges[:]
+        for edge in edges:
+            if [edge.start, edge.end] in node_pairs:
+                self.edges.remove(edge)
+
+    def add_edge(self, n1, n2, cost=1, both_ends=True):
+        node_pairs = self.get_node_pairs(n1, n2, both_ends)
+        for edge in self.edges:
+            if [edge.start, edge.end] in node_pairs:
+                return ValueError('Edge {} {} already exists'.format(n1, n2))
+
+        self.edges.append(Edge(start=n1, end=n2, cost=cost))
+        if both_ends:
+            self.edges.append(Edge(start=n2, end=n1, cost=cost))
+
+    @property
+    def neighbours(self):
+        neighbours = {vertex: set() for vertex in self.vertices}
+        for edge in self.edges:
+            neighbours[edge.start].add((edge.end, edge.cost))
+            neighbours[edge.end].add((edge.start, edge.cost))
+        return neighbours
+
+    def dijkstra(self, source, dest):
+        assert source in self.vertices, 'Such source node doesn\'t exist'
+        distances = {vertex: inf for vertex in self.vertices}
+        previous_vertices = {
+            vertex: None for vertex in self.vertices
+        }
+        distances[source] = 0
+        vertices = self.vertices.copy()
+
+        while vertices:
+            current_vertex = min(
+                vertices, key=lambda vertex: distances[vertex])
+            vertices.remove(current_vertex)
+            if distances[current_vertex] == inf:
+                break
+            for neighbour, cost in self.neighbours[current_vertex]:
+                alternative_route = distances[current_vertex] + cost
+                if alternative_route < distances[neighbour]:
+                    distances[neighbour] = alternative_route
+                    previous_vertices[neighbour] = current_vertex
+
+        path, current_vertex = deque(), dest
+        while previous_vertices[current_vertex] is not None:
+            path.appendleft(current_vertex)
+            current_vertex = previous_vertices[current_vertex]
+        if path:
+            path.appendleft(current_vertex)
+        return path
+
+
+graphList = []
+
+
+###
+
+###
+
+###
+
+def creatCirclefromList(list, radius):  # creates objects for each item in list
+    for thing in list:
+        pygame.draw.circle(screen, RED, (int(thing.x), int(thing.y)), radius)
+
+
+def moveFuncAB(sub, goal, goalrad, position):  # moves object named 'sub' to object 'goal' within distance 'goalrad'
+    if (abs(goal.x - sub.x) or abs(goal.y - sub.y)) > goalrad:
+
+        magd = float(
+            numpy.sqrt((goal.x - sub.x) ** 2 + (goal.y - sub.y) ** 2))  # Magnitude of vector from sub to goal
+        sub.x += sub.velx
+        sub.y += sub.vely
+        sub.velx = (2 / (magd)) * (goal.x - sub.x)
+        sub.vely = (2 / (magd)) * (goal.y - sub.y)
+
+        # stops sub if obsticle hit
+        for ob in blockList:
+            if sub.x > ob.x and sub.x < (ob.x + ob.w) and sub.y > (ob.y) and sub.y < (ob.y + ob.h):
+                sub.velx = 0
+                sub.vely = 0
+
+    # finishs sub on goal
+    if abs(goal.x - sub.x) and abs(goal.y - sub.y) <= goalrad:
+        sub.x = goal.x
+        sub.y = goal.y
+        # if an object can reach the goal, then the two positions must be nodes linked by an arc
+
+        subpos = (linkScannerList[position]).index(sub)
+        graphList.append((str(((nodeList[subpos]).x, (nodeList[subpos]).y)), str(((nodeList[position]).x, (nodeList[position]).y)), simplePythag(
+            [((nodeList[subpos]).x - (nodeList[position]).x), ((nodeList[subpos]).y - (nodeList[position]).y)])))
+
+
+# def coordtoNode(coord):
+#    return node(coord[0],coord[1])
+
+def strtonums(string):
+    x = ''
+    y = ''
+    X = True
+    Y = False
+    for i in string:
+        if i != '(' and i != ')':
+            if Y is True:
+                y += i
+            if i == ',':
+                X = False
+                Y = True
+            if X is True:
+                x += i
+
+    coord = ((float(x), float(y)))
+    return coord
+
+
+def makescan(linkScannerList, position):  # sends a scanner to node at index(posiiton) in node list
+    # print(position)
+    for scanner in linkScannerList[position]:
+        if ((linkScannerList[position][position]).x != scanner.x) or ((linkScannerList[position][position]).y != scanner.y):
+            pygame.draw.circle(screen, BLUE1, ((int(scanner.x)), (int(scanner.y))), 3)
+
+            moveFuncAB(scanner, linkScannerList[position][position], 2, position)
+
+
+def simpleMoveFunc(sub, coord, goalrad):
+    # print(sub.x,sub.y)
+    #print(coord[0], coord[1])
+
+    if (abs(coord[0] - sub.x) or abs(coord[1] - sub.y)) > goalrad:
+        magd = float(
+            numpy.sqrt((coord[0] - sub.x) ** 2 + (coord[1] - sub.y) ** 2))  # Magnitude of vector from sub to goal
+        sub.x += sub.velx
+        sub.y += sub.vely
+        sub.velx = (2 / (magd)) * (coord[0] - sub.x)
+        sub.vely = (2 / (magd)) * (coord[1] - sub.y)
+
+        # stops sub if obsticle hit
+        for ob in blockList:
+            if sub.x > ob.x and sub.x < (ob.x + ob.w) and sub.y > (ob.y) and sub.y < (ob.y + ob.h):
+                sub.velx = 0
+                sub.vely = 0
+
+    # finishs sub on goal
+    if abs(coord[0] - sub.x) and abs(coord[1] - sub.y) <= goalrad:
+        sub.x = coord[0]
+        sub.y = coord[1]
+
+
+def startscreen():
+
+    run1 = True
+    global screentime
+
+    # for block in blockList:
+    # print(block.n1, block.n2, block.n3, block.n4)
+
+    while run1 == 1:
+        screen.fill(BLACK)
+
+        # quit feature
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                print(screentime / 60)
+
+                return False
+        # draw obsticles
+        for block in blockList:
+            pygame.draw.rect(screen, BLACK1, (int(block.x), int(
+                block.y), int(block.w), int(block.h)))
+
+        # draw nodes
+        for node in nodeList:
+            pygame.draw.circle(screen, RED, (int(node.x), int(node.y)), 5)
+        # draw grid
+        for width in range(0, int(SW / gridSize)):
+            pygame.draw.rect(screen, WHITE, (gridSize * width, int(0), int(1), int(SH)))
+        for height in range(0, int(SH / gridSize)):
+            pygame.draw.rect(screen, WHITE, (int(0), gridSize * height, int(SW), int(1)))
+        # draw axis
+        pygame.draw.rect(screen, GREEN1, (int(SW / 2), int(0), int(1), int(SH)))
+        pygame.draw.rect(screen, GREEN1, (int(0), int(SH / 2), int(SW), int(1)))
+        # draw goal
+        pygame.draw.circle(screen, PINK, (int(goal.x), int(goal.y)), goalrad)
+        # draw sub
+        pygame.draw.circle(screen, GOLD, (int(sub.x), int(sub.y)), subrad)
+
+        # movement
+        #moveFuncAB(sub, goal, goalrad, 0)
+        ####
+
+        ####
+
+        # node scanners!
+
+        for listno in range(len(linkScannerList)):  # for every node, a scan must be made
+            makescan(linkScannerList, listno)
+            # print('hi')
+
+        # print('stop')
+
+        # below is getting completed soon
+
+        if screentime >= 5*60:  # and screentime < 8*60:
+            # print(graphList)
+            # for coordo in graphList:
+            #     print(coordo)
+            for node1 in nodeList:
+                print(node1.x, node1.y)
+                for node2 in nodeList:
+                    pygame.draw.line(screen, WHITE, (int(node1.x), int(node1.y)),
+                                     (int(node2.x), int(node2.y)))
+
+            graphList2 = list(dict.fromkeys(graphList))
+            # for coordo in graphList2:
+            #     print(coordo)
+            # print('break')
+            print(linkScannerList)
+            print('\n')
+            print('break')
+            graph = Graph(graphList2)
+            travelOrder = graph.dijkstra('(500.0, 600.0)', '(700.0, 600.0)')
+            # print((travelOrder))
+            # print(graphList)
+            # print('\n')
+            # print(graphList2)
+            #simpleMoveFunc(sub, strtonums(travelOrder[1]), goalrad)
+
+        # if screentime >= 8*60:
+
+        #    simpleMoveFunc(sub, strtonums(travelOrder[2]), goalrad)
+
+        pygame.display.update()
+        Clock.tick(FPS)
+        screentime += 1
+
+
+startscreen()
